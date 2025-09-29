@@ -10,8 +10,9 @@
   <img src="https://img.shields.io/badge/tests-manual%20%7C%20ready-blueviolet" alt="tests" />
 </p>
 
-
-Простая игра **Snake**, адаптированная как учебный проект для Тестировщиков.
+<h3 align="center">
+Простая игра Змейка, адаптированная как учебный проект для Тестировщиков.
+</h3>
 
 </div>
 
