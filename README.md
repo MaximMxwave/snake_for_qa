@@ -2,6 +2,15 @@
 
 # 🐍 Snake for QA (Demo Project)
 
+<p align="center">
+  <img src="https://img.shields.io/badge/status-active-brightgreen" alt="status" />
+  <img src="https://img.shields.io/badge/game-Snake-yellow?logo=google-play" alt="game" />
+  <img src="https://img.shields.io/badge/HTML5-%23E34F26.svg?logo=html5&logoColor=white" alt="html5" />
+  <img src="https://img.shields.io/badge/QA-friendly-orange" alt="qa" />
+  <img src="https://img.shields.io/badge/tests-manual%20%7C%20ready-blueviolet" alt="tests" />
+</p>
+
+
 Простая игра **Snake**, адаптированная как учебный проект для Тестировщиков.
 
 </div>
