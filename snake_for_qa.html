@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Snake — тестовая игра для QA</title>
+<style>
+  :root{ --bg:#0b0b0b; --panel:#111; --accent:#ffd400; --muted:#999; --card:#141414; }
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,#061016 0%, #07121a 100%);color:#fff;font-family:Inter,Segoe UI,Roboto,Arial;}
+  .wrap{min-height:100%;display:flex;align-items:center;justify-content:center;padding:32px;box-sizing:border-box;}
+  .container{display:flex;gap:20px;align-items:flex-start;}
+  .game { background:var(--card); padding:18px; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,0.6); }
+  canvas{background:#000;border-radius:8px;display:block;}
+  .controls{width:300px;display:flex;flex-direction:column;gap:12px;margin-left:8px;}
+  .panel{background:rgba(255,255,255,0.03);padding:12px;border-radius:8px;}
+  button{background:var(--accent);border:none;padding:8px 12px;border-radius:8px;color:#000;font-weight:700;cursor:pointer;}
+  .muted{color:var(--muted);font-size:13px;}
+  .row{display:flex;gap:8px;align-items:center;}
+  label{font-size:13px;color:var(--muted);}
+  input[type=range]{width:100%;}
+  .big{font-size:20px;font-weight:700;color:var(--accent);}
+  .small{font-size:14px;color:#fff;}
+  .kbd{display:inline-block;padding:6px 8px;border-radius:6px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.04);font-family:monospace;}
+  footer{margin-top:12px;color:var(--muted);font-size:12px;}
+  @media(max-width:900px){ .container{flex-direction:column;align-items:center} .controls{width:100%;margin-left:0} canvas{width:320px;height:320px} }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="container">
+      <div class="game panel">
+        <canvas id="gameCanvas" width="560" height="560"></canvas>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;">
+          <div class="muted">Статус: <span id="status">Готов</span></div>
+          <div class="muted">Время: <span id="time">0.0</span>s</div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="panel">
+          <div class="row"><div class="big" id="score">Счёт: 0</div></div>
+          <div class="row"><div class="muted">Рекорд: <span id="highscore">0</span></div></div>
+          <div style="height:8px"></div>
+          <div class="row"><button id="btnStart">Новая игра</button><button id="btnPause">Пауза</button></div>
+          <div class="row"><label>Скорость: <span id="speedLabel">8</span></label></div>
+          <input type="range" id="speed" min="4" max="16" value="8" />
+          <div style="height:8px"></div>
+          <div class="muted">Управление: <span class="kbd">← ↑ → ↓</span> или свайпы по экрану.</div>
+          <footer>Хорошо подходит для тестирования: обработка ввода, локальное хранилище, тайминги, коллизии.</footer>
+        </div>
+
+        <div class="panel muted" id="testIdeas">
+          <strong>Идеи тестов (быстро):</strong>
+          <ul>
+            <li>Кроссбраузерная проверка (desktop/mobile).</li>
+            <li>Тесты на быстрые нажатия и смену направления.</li>
+            <li>Проверка сохранения рекорда в localStorage.</li>
+            <li>Граничные значения скорости, коллизии со стеной и с хвостом.</li>
+            <li>Accessibility: фокус, контраст, клавиатурная навигация.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* Snake for QA — single file. Features:
+ - responsive canvas
+ - keyboard + touch controls (swipe)
+ - pause/resume, new game
+ - score and highscore in localStorage
+ - adjustable speed
+ - stable tick-based movement
+*/
+
+(function(){
+  'use strict';
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const highEl = document.getElementById('highscore');
+  const statusEl = document.getElementById('status');
+  const timeEl = document.getElementById('time');
+  const btnStart = document.getElementById('btnStart');
+  const btnPause = document.getElementById('btnPause');
+  const speedInput = document.getElementById('speed');
+  const speedLabel = document.getElementById('speedLabel');
+  const STORAGE_KEY = 'snake_highscore_v1';
+
+  let cols = 20, rows = 20;
+  let cell = Math.floor(canvas.width / cols);
+  let snake = [];
+  let dir = {x:1,y:0};
+  let nextDir = dir;
+  let food = null;
+  let running = false;
+  let lastTick = 0;
+  let tickInterval = 1000 / 8; // ms per step (speed)
+  let score = 0;
+  let highscore = parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10) || 0;
+  highEl.textContent = highscore;
+  let startTime = 0;
+
+  function resizeCanvas(){
+    // keep square canvas, max 80vw or 560px
+    const max = Math.min(window.innerWidth*0.8, 560);
+    canvas.width = canvas.height = Math.floor(max);
+    cell = Math.floor(canvas.width / cols);
+    draw();
+  }
+
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  function resetGame(){
+    snake = [{x:10,y:10},{x:9,y:10},{x:8,y:10}];
+    dir = {x:1,y:0};
+    nextDir = dir;
+    score = 0;
+    scoreEl.textContent = 'Счёт: ' + score;
+    food = placeFood();
+    running = true;
+    lastTick = performance.now();
+    startTime = performance.now();
+    statusEl.textContent = 'Игра';
+    tickInterval = 1000 / parseInt(speedInput.value,10);
+  }
+
+  function placeFood(){
+    let pos;
+    do {
+      pos = {x: Math.floor(Math.random()*cols), y: Math.floor(Math.random()*rows)};
+    } while (snake.some(s => s.x===pos.x && s.y===pos.y));
+    return pos;
+  }
+
+  function step(){
+    // move snake
+    dir = sanitizeDir(nextDir, dir);
+    const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+    // wall collision -> die
+    if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows) {
+      gameOver();
+      return;
+    }
+    // self collision
+    if (snake.some(s => s.x===head.x && s.y===head.y)) {
+      gameOver();
+      return;
+    }
+    snake.unshift(head);
+    // ate food?
+    if (head.x === food.x && head.y === food.y) {
+      score += 10;
+      scoreEl.textContent = 'Счёт: ' + score;
+      playBeep(600,0.05);
+      food = placeFood();
+      if (score > highscore) {
+        highscore = score;
+        localStorage.setItem(STORAGE_KEY, String(highscore));
+        highEl.textContent = highscore;
+      }
+    } else {
+      snake.pop();
+    }
+  }
+
+  function gameOver(){
+    running = false;
+    statusEl.textContent = 'Конец игры';
+    playBeep(180,0.2);
+  }
+
+  function sanitizeDir(next, current){
+    // prevent reversing direction directly
+    if (next.x === -current.x && next.y === -current.y) return current;
+    return next;
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    // background grid
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    // draw food
+    if (food) {
+      ctx.fillStyle = '#e74c3c';
+      ctx.fillRect(food.x*cell+2, food.y*cell+2, cell-4, cell-4);
+    }
+    // draw snake
+    for (let i=0;i<snake.length;i++){
+      const s = snake[i];
+      ctx.fillStyle = i===0 ? '#ffd400' : '#2ecc71';
+      roundRect(ctx, s.x*cell+1, s.y*cell+1, cell-2, cell-2, 6);
+    }
+    // grid lines (optional for QA visibility)
+    ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+    ctx.lineWidth = 1;
+    for (let x=0;x<=cols;x++){
+      ctx.beginPath(); ctx.moveTo(x*cell,0); ctx.lineTo(x*cell,canvas.height); ctx.stroke();
+    }
+    for (let y=0;y<=rows;y++){
+      ctx.beginPath(); ctx.moveTo(0,y*cell); ctx.lineTo(canvas.width,y*cell); ctx.stroke();
+    }
+  }
+
+  function roundRect(ctx,x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function loop(now){
+    if (!lastTick) lastTick = now;
+    const elapsed = now - lastTick;
+    if (running && elapsed >= tickInterval) {
+      // allow multiple steps if needed
+      const steps = Math.floor(elapsed / tickInterval);
+      for (let i=0;i<steps;i++){ step(); lastTick += tickInterval; }
+      draw();
+    }
+    // update timer display
+    const t = running ? ((performance.now()-startTime)/1000).toFixed(1) : ((lastTick? (lastTick-startTime):0)/1000).toFixed(1);
+    timeEl.textContent = t;
+    requestAnimationFrame(loop);
+  }
+
+  // controls
+  window.addEventListener('keydown', function(e){
+    if (!running && e.key === 'n') { resetGame(); }
+    if (e.key === 'p') { togglePause(); }
+    const km = keyToDir(e);
+    if (km) { nextDir = km; e.preventDefault(); }
+  });
+
+  function keyToDir(e){
+    if (e.key === 'ArrowUp' || e.key === 'w') return {x:0,y:-1};
+    if (e.key === 'ArrowDown' || e.key === 's') return {x:0,y:1};
+    if (e.key === 'ArrowLeft' || e.key === 'a') return {x:-1,y:0};
+    if (e.key === 'ArrowRight' || e.key === 'd') return {x:1,y:0};
+    return null;
+  }
+
+  // buttons
+  btnStart.addEventListener('click', function(){ resetGame(); });
+  btnPause.addEventListener('click', function(){ togglePause(); });
+
+  function togglePause(){
+    if (!running){ running = true; statusEl.textContent = 'Игра'; lastTick = performance.now(); startTime = performance.now() - (parseFloat(timeEl.textContent)||0)*1000; return; }
+    // pause
+    running = false;
+    statusEl.textContent = 'Пауза';
+  }
+
+  speedInput.addEventListener('input', function(){
+    speedLabel.textContent = speedInput.value;
+    tickInterval = 1000 / parseInt(speedInput.value,10);
+  });
+
+  // touch/swipe controls for mobile
+  let touchStart = null;
+  canvas.addEventListener('pointerdown', function(e){
+    touchStart = {x:e.clientX, y:e.clientY};
+  });
+  canvas.addEventListener('pointerup', function(e){
+    if (!touchStart) return;
+    const dx = e.clientX - touchStart.x;
+    const dy = e.clientY - touchStart.y;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 20) {
+      nextDir = dx > 0 ? {x:1,y:0} : {x:-1,y:0};
+    } else if (Math.abs(dy) > 20){
+      nextDir = dy > 0 ? {x:0,y:1} : {x:0,y:-1};
+    }
+    touchStart = null;
+  });
+
+  // simple beep generator
+  function playBeep(freq, duration){
+    try{
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = freq;
+      g.gain.value = 0.01;
+      o.connect(g); g.connect(ctx.destination);
+      o.start();
+      setTimeout(()=>{ o.stop(); ctx.close(); }, (duration||0.06)*1000);
+    }catch(e){ /* ignore on unsupported */ }
+  }
+
+  // init
+  resetGame();
+  requestAnimationFrame(loop);
+
+  // expose for debugging in console
+  window._snake = { reset:resetGame, step:step, snake:()=>snake, placeFood:placeFood };
+})();
+</script>
+</body>
+</html>
