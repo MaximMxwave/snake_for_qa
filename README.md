@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🐍 Snake for QA (Demo Project)
+# 🐍 Snake for QA
 
 <p align="center">
   <img src="https://img.shields.io/badge/status-active-brightgreen" alt="status" />
