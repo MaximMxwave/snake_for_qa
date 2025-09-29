@@ -30,6 +30,10 @@
 
 ![image](https://github.com/MaximMxwave/snake_for_qa/blob/main/game.png)
 
+**Тест-кейсы**
+
+![image](https://github.com/MaximMxwave/snake_for_qa/blob/main/test_cases.png)
+
 ## 🧪 Что можно тестировать
 - Кроссбраузерность (Chrome, Firefox, Safari, мобильные).
 - Управление (клавиатура, тач).
